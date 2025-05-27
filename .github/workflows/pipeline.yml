@@ -1,0 +1,43 @@
+name: Conditions Pipeline
+
+on:
+  push:
+    branches:
+      - main  # or any other branch you want
+
+jobs:
+  conditions:
+    runs-on: ubuntu-latest
+
+    permissions:
+      issues: write  # Required to create GitHub issues
+
+    steps:
+      - name: Run random condition and create GitHub Issue on failure
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "Running random test..."
+
+          if [ $((RANDOM % 2)) -eq 0 ]; then
+            echo "Success!"
+            exit 0
+          else
+            echo "Failure!"
+
+            ISSUE_PAYLOAD=$(jq -n \
+              --arg title "🚨 Pipeline Failed on '$BRANCH'" \
+              --arg body "The pipeline failed at [$RUN_URL]($RUN_URL) on commit \`$SHA\`." \
+              '{title: $title, body: $body}')
+
+            curl -s -X POST "https://api.github.com/repos/$REPO/issues" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -d "$ISSUE_PAYLOAD"
+
+            exit 1
+          fi
